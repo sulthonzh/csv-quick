@@ -1,0 +1,12 @@
+{
+  "name": "csv-quick",
+  "version": "1.0.0",
+  "description": "Zero-dep RFC 4180 CSV parser and serializer. Quoted fields, escaped quotes, custom delimiters, headers, streaming.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": { "csv-quick": "cli.js" },
+  "scripts": { "test": "node --test test/*.test.js" },
+  "keywords": ["csv", "parser", "serializer", "rfc4180", "zero-dependency"],
+  "license": "MIT",
+  "author": "sulthonzh"
+}
