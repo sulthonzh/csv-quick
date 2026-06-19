@@ -2,10 +2,11 @@
 import { readFileSync } from 'node:fs';
 import { parse, parseObjects, stringify, stringifyObjects } from './src/index.js';
 
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 const args = process.argv.slice(2);
 
 function usage() {
-  console.log(`csv-quick — Zero-dep CSV parser/serializer
+  console.log(`csv-quick v${pkg.version} — Zero-dep RFC 4180 CSV parser/serializer
 
 Usage:
   csv-quick parse [file]           Parse CSV → JSON arrays
@@ -17,8 +18,9 @@ Usage:
 Options:
   --delimiter <char>   Field delimiter (default: ,)
   --quote <char>       Quote character (default: ")
-  --eol <str>          End of line for stringify (default: \\n)
+  --eol <str>          End of line for stringify (default: \n)
   --columns <a,b,c>    Specify columns for stringify-objects
+  -V, --version        Show version
   -h, --help           Show this help
 `);
 }
@@ -27,23 +29,37 @@ function readInput(fileArg) {
   return readFileSync(fileArg && fileArg !== '-' ? fileArg : 0, 'utf-8');
 }
 
-function getOpt(name) {
-  const idx = args.indexOf(name);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
+// Parse options that consume a following argument
+const OPTS_WITH_VALUE = ['--delimiter', '--quote', '--eol', '--columns'];
+const parsedArgs = [];
+const opts = {};
+
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (OPTS_WITH_VALUE.includes(a)) {
+    if (i + 1 < args.length) {
+      const val = args[i + 1];
+      const key = a.slice(2);
+      if (key === 'columns') opts.columns = val.split(',');
+      else opts[key] = val;
+      i++; // skip the value
+    }
+  } else {
+    parsedArgs.push(a);
+  }
 }
 
-const cmd = args.find((a) => !a.startsWith('-') && a !== '-');
+// Version flag
+if (parsedArgs[0] === '-V' || parsedArgs[0] === '--version') {
+  console.log(pkg.version);
+  process.exit(0);
+}
 
-if (!cmd || cmd === '--help' || cmd === '-h') { usage(); process.exit(0); }
+const cmd = parsedArgs.find((a) => !a.startsWith('-') && a !== '-');
 
-const fileArg = args.filter((a) => !a.startsWith('-') && a !== cmd)[0];
-const opts = {};
-const delim = getOpt('--delimiter');
-const quote = getOpt('--quote');
-const eol = getOpt('--eol');
-if (delim) opts.delimiter = delim;
-if (quote) opts.quote = quote;
-if (eol) opts.eol = eol;
+if (!cmd || parsedArgs[0] === '--help' || parsedArgs[0] === '-h') { usage(); process.exit(0); }
+
+const fileArg = parsedArgs.filter((a) => !a.startsWith('-') && a !== cmd)[0];
 
 try {
   const input = readInput(fileArg);
@@ -58,8 +74,6 @@ try {
       console.log(stringify(JSON.parse(input), opts));
       break;
     case 'stringify-objects': {
-      const cols = getOpt('--columns');
-      if (cols) opts.columns = cols.split(',');
       console.log(stringifyObjects(JSON.parse(input), opts));
       break;
     }

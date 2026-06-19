@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { parse, parseObjects, stringify, stringifyObjects } from '../src/index.js';
 
 // ─── Parse: basics ───
@@ -120,6 +122,33 @@ test('same delimiter and quote throws', () => {
   assert.throws(() => parse('a,b', { delimiter: '|', quote: '|' }), /must differ/);
 });
 
+test('non-string input throws TypeError', () => {
+  assert.throws(() => parse(null), /must be a string/);
+  assert.throws(() => parse(123), /must be a string/);
+  assert.throws(() => parse(undefined), /must be a string/);
+});
+
+// ─── BOM stripping ───
+test('UTF-8 BOM stripped from input', () => {
+  const bom = '\uFEFF';
+  assert.deepEqual(parse(bom + 'a,b\nc,d'), [['a','b'],['c','d']]);
+});
+
+test('BOM with quoted fields', () => {
+  const bom = '\uFEFF';
+  assert.deepEqual(parse(bom + '"hello",world'), [['hello','world']]);
+});
+
+test('BOM with parseObjects', () => {
+  const bom = '\uFEFF';
+  assert.deepEqual(parseObjects(bom + 'name,age\nAlice,30'), [{ name: 'Alice', age: '30' }]);
+});
+
+test('no BOM in middle of data is preserved', () => {
+  // BOM char in the middle of content is a regular character
+  assert.deepEqual(parse('a,\uFEFFb'), [['a','\uFEFFb']]);
+});
+
 // ─── parseObjects ───
 test('parseObjects basic', () => {
   const csv = 'name,age\nAlice,30\nBob,25';
@@ -146,6 +175,23 @@ test('parseObjects empty input', () => {
 test('parseObjects with quoted headers', () => {
   const csv = '"first name","last name"\n"John","Doe"';
   assert.deepEqual(parseObjects(csv), [{ 'first name': 'John', 'last name': 'Doe' }]);
+});
+
+test('parseObjects duplicate headers collected into array', () => {
+  const csv = 'name,phone,name\nAlice,555,Alice2';
+  const result = parseObjects(csv);
+  assert.equal(result[0].name[0], 'Alice');
+  assert.equal(result[0].name[1], 'Alice2');
+  assert.equal(result[0].phone, '555');
+});
+
+test('parseObjects only header row', () => {
+  assert.deepEqual(parseObjects('a,b,c'), []);
+});
+
+test('parseObjects skipEmptyLines', () => {
+  const csv = 'a,b\n\n1,2';
+  assert.deepEqual(parseObjects(csv, { skipEmptyLines: true }), [{ a: '1', b: '2' }]);
 });
 
 // ─── Stringify ───
@@ -201,6 +247,22 @@ test('stringify no escaping needed', () => {
   assert.equal(stringify([['hello','world']]), 'hello,world\n');
 });
 
+test('stringify empty array in row', () => {
+  assert.equal(stringify([[]]), '\n');
+});
+
+test('stringify boolean values', () => {
+  assert.equal(stringify([[true, false]]), 'true,false\n');
+});
+
+test('stringify zero and empty string', () => {
+  assert.equal(stringify([[0, '']]), '0,\n');
+});
+
+test('stringify custom quote char', () => {
+  assert.equal(stringify([['a,b','c']], { quote: "'" }), "'a,b',c\n");
+});
+
 // ─── stringifyObjects ───
 test('stringifyObjects basic', () => {
   const csv = stringifyObjects([{ a: '1', b: '2' }]);
@@ -229,6 +291,19 @@ test('stringifyObjects with special chars', () => {
   assert.equal(csv, 'name\n"John ""JD"" Doe"\n');
 });
 
+test('stringifyObjects with column selection', () => {
+  const csv = stringifyObjects(
+    [{ a: '1', b: '2', c: '3' }],
+    { columns: ['a', 'c'] }
+  );
+  assert.equal(csv, 'a,c\n1,3\n');
+});
+
+test('stringifyObjects numeric values', () => {
+  const csv = stringifyObjects([{ x: 10, y: 20.5 }]);
+  assert.equal(csv, 'x,y\n10,20.5\n');
+});
+
 // ─── Round-trip ───
 test('round-trip parse → stringify → parse', () => {
   const original = [['name','age','"note"'],['Alice','30','likes "cats"'],['Bob','25','naïve']];
@@ -254,9 +329,25 @@ test('round-trip with semicolon delimiter', () => {
   assert.deepEqual(reparsed, original);
 });
 
+test('round-trip with tab delimiter', () => {
+  const original = [['col1\tinner','col2'],['val1','val2\textra']];
+  const csv = stringify(original, { delimiter: '\t' });
+  const reparsed = parse(csv, { delimiter: '\t' });
+  assert.deepEqual(reparsed, original);
+});
+
+test('round-trip objects with BOM', () => {
+  const original = [
+    { name: 'Alice', city: 'NYC' },
+    { name: 'Bob', city: 'LA' },
+  ];
+  const csv = '\uFEFF' + stringifyObjects(original);
+  const reparsed = parseObjects(csv);
+  assert.deepEqual(reparsed, original);
+});
+
 // ─── Real-world RFC 4180 examples ───
 test('RFC 4180 example with trailing spaces', () => {
-  // Fields can have leading/trailing spaces, only quoted if special chars
   assert.deepEqual(parse('a, b ,c'), [['a',' b ','c']]);
 });
 
@@ -265,11 +356,94 @@ test('RFC 4180 last field without newline', () => {
 });
 
 test('field that is only a quote char (unquoted)', () => {
-  // Without opening quote, the char is literal
   assert.deepEqual(parse('a,b'), [['a','b']]);
 });
 
 test('quoted field followed by non-delimiter', () => {
-  // "abc"def → abcdef (content after closing quote until delimiter/newline)
   assert.deepEqual(parse('"abc"def,b'), [['abcdef','b']]);
+});
+
+// ─── Large input ───
+test('10K row CSV', () => {
+  const rows = [];
+  for (let i = 0; i < 10000; i++) rows.push([String(i), `name${i}`, String(i * 2)]);
+  const csv = stringify(rows);
+  const reparsed = parse(csv);
+  assert.equal(reparsed.length, 10000);
+  assert.deepEqual(reparsed[9999], ['9999', 'name9999', '19998']);
+});
+
+// ─── CLI version flag ───
+test('CLI --version outputs version', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+  const output = execFileSync('node', ['cli.js', '--version'], { encoding: 'utf-8' }).trim();
+  assert.equal(output, pkg.version);
+});
+
+test('CLI -V outputs version', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+  const output = execFileSync('node', ['cli.js', '-V'], { encoding: 'utf-8' }).trim();
+  assert.equal(output, pkg.version);
+});
+
+test('CLI parse from stdin', () => {
+  const output = execFileSync('node', ['cli.js', 'parse'], {
+    input: 'a,b\n1,2',
+    encoding: 'utf-8',
+  });
+  assert.deepEqual(JSON.parse(output), [['a','b'],['1','2']]);
+});
+
+test('CLI parse-objects from stdin', () => {
+  const output = execFileSync('node', ['cli.js', 'parse-objects'], {
+    input: 'name,age\nAlice,30',
+    encoding: 'utf-8',
+  });
+  assert.deepEqual(JSON.parse(output), [{ name: 'Alice', age: '30' }]);
+});
+
+test('CLI stringify from stdin', () => {
+  const output = execFileSync('node', ['cli.js', 'stringify'], {
+    input: '[["a","b"],["1","2"]]',
+    encoding: 'utf-8',
+  });
+  assert.equal(output.trim(), 'a,b\n1,2');
+});
+
+test('CLI --delimiter option', () => {
+  const output = execFileSync('node', ['cli.js', 'parse', '-', '--delimiter', ';'], {
+    input: 'a;b;c',
+    encoding: 'utf-8',
+  });
+  assert.deepEqual(JSON.parse(output), [['a','b','c']]);
+});;
+
+// ─── Stress: deeply nested quotes ───
+test('multiple escaped quotes in one field', () => {
+  assert.deepEqual(parse('"""a""b""c"""'), [['"a"b"c"']]);
+});
+
+test('field with only escaped quotes', () => {
+  assert.deepEqual(parse('""""""'), [['""']]);
+});
+
+test('quoted empty rows', () => {
+  assert.deepEqual(parse('"","",""\n"a","b","c"'), [['','',''],['a','b','c']]);
+});
+
+// ─── Unicode ───
+test('unicode characters in fields', () => {
+  assert.deepEqual(parse('héllo,wörld'), [['héllo','wörld']]);
+});
+
+test('emoji in fields', () => {
+  assert.deepEqual(parse('🎉,🎊'), [['🎉','🎊']]);
+});
+
+test('CJK characters', () => {
+  assert.deepEqual(parse('你好,世界'), [['你好','世界']]);
+});
+
+test('quoted field with unicode', () => {
+  assert.deepEqual(parse('"héllo,世界",b'), [['héllo,世界','b']]);
 });

@@ -1,8 +1,18 @@
 /**
  * CSV Parser — RFC 4180 compliant state machine.
  * Handles quoted fields, escaped quotes (""), custom delimiters,
- * CR/LF/CRLF line endings, and optional headers.
+ * CR/LF/CRLF line endings, BOM stripping, and optional headers.
  */
+
+/**
+ * Strip UTF-8 BOM (\uFEFF) from the start of input.
+ * Excel and other tools prepend BOM to CSV files.
+ * @param {string} input
+ * @returns {string}
+ */
+function stripBOM(input) {
+  return input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+}
 
 /**
  * Parse CSV text into an array of arrays (rows of string fields).
@@ -15,24 +25,28 @@ export function parse(input, opts = {}) {
   const quote = opts.quote ?? '"';
   const skipEmpty = opts.skipEmptyLines ?? false;
 
+  if (typeof input !== 'string') throw new TypeError('input must be a string');
   if (delim.length !== 1) throw new Error('delimiter must be a single character');
   if (quote.length !== 1) throw new Error('quote must be a single character');
   if (delim === quote) throw new Error('delimiter and quote must differ');
+
+  // Strip UTF-8 BOM if present
+  const text = stripBOM(input);
 
   const rows = [];
   let row = [];
   let field = '';
   let inQuotes = false;
   let i = 0;
-  const len = input.length;
+  const len = text.length;
 
   while (i < len) {
-    const ch = input[i];
+    const ch = text[i];
 
     if (inQuotes) {
       if (ch === quote) {
         // Check for escaped quote (double quote char)
-        if (input[i + 1] === quote) {
+        if (text[i + 1] === quote) {
           field += quote;
           i += 2;
           continue;
@@ -48,6 +62,8 @@ export function parse(input, opts = {}) {
     }
 
     // Not in quotes
+    // Recognize quote only at start of field (field === '')
+    // A quote appearing mid-field is treated as a literal character
     if (ch === quote && field === '') {
       inQuotes = true;
       i++;
@@ -67,7 +83,7 @@ export function parse(input, opts = {}) {
       field = '';
       rows.push(row);
       row = [];
-      if (input[i + 1] === '\n') i += 2;
+      if (text[i + 1] === '\n') i += 2;
       else i++;
       continue;
     }
@@ -85,7 +101,7 @@ export function parse(input, opts = {}) {
     i++;
   }
 
-  // Last field/row if input doesn't end with newline
+  // Last field/row if text doesn't end with newline
   if (field !== '' || row.length > 0) {
     row.push(field);
     rows.push(row);
@@ -112,7 +128,14 @@ export function parseObjects(input, opts = {}) {
   return rows.slice(1).map((row) => {
     const obj = {};
     for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = row[j] ?? '';
+      const h = headers[j];
+      if (h in obj) {
+        // Duplicate header: convert to array if not already
+        if (!Array.isArray(obj[h])) obj[h] = [obj[h]];
+        obj[h].push(row[j] ?? '');
+      } else {
+        obj[h] = row[j] ?? '';
+      }
     }
     return obj;
   });
