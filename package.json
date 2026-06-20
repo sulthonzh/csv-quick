@@ -13,15 +13,35 @@
     "src/",
     "cli.js",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
-  "bin": { "csv-quick": "cli.js" },
+  "bin": {
+    "csv-quick": "cli.js"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
     "prepublishOnly": "npm test"
   },
-  "keywords": ["csv", "parser", "serializer", "rfc4180", "zero-dependency", "tsv", "bom"],
+  "keywords": [
+    "csv",
+    "parser",
+    "serializer",
+    "rfc4180",
+    "zero-dependency",
+    "tsv",
+    "bom"
+  ],
   "license": "MIT",
-  "author": "sulthonzh"
+  "author": "sulthonzh",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sulthonzh/csv-quick.git"
+  },
+  "homepage": "https://github.com/sulthonzh/csv-quick",
+  "bugs": {
+    "url": "https://github.com/sulthonzh/csv-quick/issues"
+  }
 }
