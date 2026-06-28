@@ -416,7 +416,7 @@ test('CLI --delimiter option', () => {
     encoding: 'utf-8',
   });
   assert.deepEqual(JSON.parse(output), [['a','b','c']]);
-});;
+});
 
 // ─── Stress: deeply nested quotes ───
 test('multiple escaped quotes in one field', () => {
