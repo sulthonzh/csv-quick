@@ -447,3 +447,97 @@ test('CJK characters', () => {
 test('quoted field with unicode', () => {
   assert.deepEqual(parse('"héllo,世界",b'), [['héllo,世界','b']]);
 });
+
+// ─── Additional edge-case tests (coverage gap closure) ───
+
+// parse.js line 30: multi-char quote throws
+test('multi-char quote throws in parse', () => {
+  assert.throws(() => parse('a,b', { quote: '""' }), /single character/);
+});
+
+// stringify.js lines 36-37: validation errors
+test('multi-char delimiter throws in stringify', () => {
+  assert.throws(() => stringify([['a','b']], { delimiter: ';;' }), /single character/);
+});
+
+test('multi-char quote throws in stringify', () => {
+  assert.throws(() => stringify([['a','b']], { quote: '""' }), /single character/);
+});
+
+// parse.js line 132/135: duplicate header with missing value
+test('duplicate header with missing value fills empty', () => {
+  const csv = 'name,phone,name\nAlice,555';
+  const result = parseObjects(csv);
+  assert.deepEqual(result[0].name, ['Alice', '']);
+  assert.equal(result[0].phone, '555');
+});
+
+// CLI help flag
+test('CLI --help shows usage', () => {
+  const output = execFileSync('node', ['cli.js', '--help'], { encoding: 'utf-8' });
+  assert.match(output, /csv-quick/);
+  assert.match(output, /Usage:/);
+});
+
+// CLI stringify-objects from stdin
+test('CLI stringify-objects from stdin', () => {
+  const output = execFileSync('node', ['cli.js', 'stringify-objects'], {
+    input: '[{"a":"1","b":"2"}]',
+    encoding: 'utf-8',
+  });
+  assert.equal(output.trim(), 'a,b\n1,2');
+});
+
+// CLI unknown command
+test('CLI unknown command exits with error', () => {
+  let err;
+  try {
+    execFileSync('node', ['cli.js', 'bogus'], { encoding: 'utf-8', stdio: 'pipe' });
+  } catch (e) {
+    err = e;
+  }
+  assert.ok(err, 'should throw for unknown command');
+});
+
+// CLI no args shows usage
+test('CLI no args shows usage', () => {
+  const output = execFileSync('node', ['cli.js'], { encoding: 'utf-8' });
+  assert.match(output, /Usage:/);
+});
+
+// CLI --columns option for stringify-objects
+test('CLI stringify-objects with --columns', () => {
+  const output = execFileSync('node', ['cli.js', 'stringify-objects', '--columns', 'a,c'], {
+    input: '[{"a":"1","b":"2","c":"3"}]',
+    encoding: 'utf-8',
+  });
+  assert.equal(output.trim(), 'a,c\n1,3');
+});
+
+// parse: custom quote char
+test('parse with custom quote char', () => {
+  assert.deepEqual(parse("'a,b',c", { quote: "'" }), [['a,b','c']]);
+});
+
+// stringify: row with empty fields preserved
+test('stringify preserves empty fields in middle', () => {
+  assert.equal(stringify([['a','','c']]), 'a,,c\n');
+});
+
+// parse: whitespace-only input returns empty-ish
+test('parse whitespace-only input', () => {
+  assert.deepEqual(parse('   '), [['   ']]);
+});
+
+// parseObjects: three duplicate headers
+test('parseObjects three duplicate headers', () => {
+  const csv = 'val,val,val\n1,2,3';
+  const result = parseObjects(csv);
+  assert.deepEqual(result[0].val, ['1', '2', '3']);
+});
+
+// stringify: trailing newline always present for non-empty input
+test('stringify always ends with eol for non-empty', () => {
+  const result = stringify([['a']]);
+  assert.equal(result.slice(-1), '\n');
+});
