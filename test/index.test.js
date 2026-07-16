@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { parse, parseObjects, stringify, stringifyObjects } from '../src/index.js';
 
 // ─── Parse: basics ───
@@ -540,4 +542,115 @@ test('parseObjects three duplicate headers', () => {
 test('stringify always ends with eol for non-empty', () => {
   const result = stringify([['a']]);
   assert.equal(result.slice(-1), '\n');
+});
+
+// CLI stringify with invalid JSON triggers catch block
+// CLI error handling (catch block, lines 83-85)
+test('CLI stringify with invalid JSON exits with error', () => {
+  let err;
+  try {
+    execFileSync('node', ['cli.js', 'stringify'], {
+      input: '{invalid json',
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+  } catch (e) {
+    err = e;
+  }
+  assert.ok(err, 'should throw on invalid JSON');
+  assert.ok(err.stderr.length > 0, 'should output error message on stderr');
+});
+
+test('CLI stringify-objects with invalid JSON exits with error', () => {
+  let err;
+  try {
+    execFileSync('node', ['cli.js', 'stringify-objects'], {
+      input: 'not json at all',
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+  } catch (e) {
+    err = e;
+  }
+  assert.ok(err, 'should throw on invalid JSON');
+});
+
+test('CLI parse with invalid delimiter exits with error', () => {
+  let err;
+  try {
+    execFileSync('node', ['cli.js', 'parse', '--delimiter', ';;'], {
+      input: 'a,b\n1,2',
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+  } catch (e) {
+    err = e;
+  }
+  assert.ok(err, 'should throw on multi-char delimiter');
+});
+
+test('CLI parse-objects with file argument reads from file', () => {
+  const tmpFile = path.join(tmpdir(), 'csvq-test.csv');
+  writeFileSync(tmpFile, 'name,age\nAlice,30\nBob,25');
+  try {
+    const output = execFileSync('node', ['cli.js', 'parse-objects', tmpFile], {
+      encoding: 'utf-8',
+    });
+    const result = JSON.parse(output);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].name, 'Alice');
+    assert.equal(result[1].age, '25');
+  } finally {
+    unlinkSync(tmpFile);
+  }
+});
+
+test('CLI parse with file argument reads from file', () => {
+  const tmpFile = path.join(tmpdir(), 'csvq-test2.csv');
+  writeFileSync(tmpFile, 'x,y\n1,2\n3,4');
+  try {
+    const output = execFileSync('node', ['cli.js', 'parse', tmpFile], {
+      encoding: 'utf-8',
+    });
+    const result = JSON.parse(output);
+    assert.deepEqual(result, [['x', 'y'], ['1', '2'], ['3', '4']]);
+  } finally {
+    unlinkSync(tmpFile);
+  }
+});
+
+test('CLI -h shows usage (short flag)', () => {
+  const output = execFileSync('node', ['cli.js', '-h'], { encoding: 'utf-8' });
+  assert.match(output, /Usage:/);
+});
+
+test('CLI --eol option for stringify', () => {
+  const output = execFileSync('node', ['cli.js', 'stringify'], {
+    input: '[["a","b"],["1","2"]]',
+    encoding: 'utf-8',
+  });
+  // default EOL is \n, verify output ends with it
+  assert.ok(output.trim().endsWith('1,2'));
+});
+
+test('CLI --quote option for parse', () => {
+  const output = execFileSync('node', ['cli.js', 'parse', '--quote', "'"], {
+    input: "'a','b'\n'1','2'",
+    encoding: 'utf-8',
+  });
+  const result = JSON.parse(output);
+  assert.deepEqual(result, [['a', 'b'], ['1', '2']]);
+});
+
+test('CLI opts with missing value are skipped gracefully', () => {
+  // --delimiter at end with no value — should not crash, just skip
+  const output = execFileSync('node', ['cli.js', 'parse', '--delimiter'], {
+    input: 'a,b\n1,2',
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  // --delimiter with no value: the arg after doesn't exist, so it's skipped
+  // and default delimiter (,) is used
+  const result = JSON.parse(output);
+  assert.deepEqual(result, [['a', 'b'], ['1', '2']]);
 });

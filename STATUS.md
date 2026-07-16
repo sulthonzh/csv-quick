@@ -1,6 +1,7 @@
 # csv-quick — Exceptional Checklist Audit
 
-**Audit date:** 2026-07-07 14:48 UTC  
+**Audit date:** 2026-07-17 (UTC 2026-07-16 19:47)  
+**Prior audit:** 2026-07-07 14:48 UTC  
 **Auditor:** oss-builder  
 **Version:** 1.1.0  
 **Status:** ✅ EXCEPTIONAL — all 13 criteria met
@@ -9,8 +10,8 @@
 
 - [x] **README hooks reader in first 3 lines** — "RFC 4180 CSV that doesn't break on real-world data. Zero dependencies. Excel-safe (BOM stripping). 88 tests." → Immediate value prop + social proof.
 - [x] **Quick start works in <2 minutes** — `npm install csv-quick` + 3-line example. Verified.
-- [x] **All tests GREEN** — 102/102 pass (100% pass rate, native Node.js test runner).
-- [x] **Test coverage ≥ 80% on core logic** — 100% statements on src/, 100% branches on parse.js + index.js, 100% branches on stringify.js. cli.js: 97.64% statements. Overall: 99.29% statements, 97.19% branches, 100% functions.
+- [x] **All tests GREEN** — 111/111 pass (100% pass rate, native Node.js test runner).
+- [x] **Test coverage ≥ 80% on core logic** — **100%** statements, **100%** branches, **100%** functions, **100%** lines across ALL files (src + cli.js).
 - [x] **Zero TypeScript errors** — N/A (pure JS ESM project, no TS compilation needed).
 - [x] **Zero ESLint warnings** — `eslint src/ cli.js test/` passes clean.
 - [x] **No TODO/FIXME comments** — `grep -rn "TODO\|FIXME\|HACK\|XXX" src/ cli.js test/` → none found.
@@ -25,11 +26,38 @@
 
 | Metric | Value |
 |--------|-------|
-| Tests | 102 |
+| Tests | 111 |
 | Pass rate | 100% |
-| Statements covered | 99.29% |
-| Branches covered | 97.19% |
+| Statements covered | 100% |
+| Branches covered | 100% |
 | Functions covered | 100% |
+| Lines covered | 100% |
+
+## Coverage Report
+
+```
+File           | % Stmts | % Branch | % Funcs | % Lines
+---------------|---------|----------|---------|---------
+All files      |     100 |      100 |     100 |     100
+cli.js         |     100 |      100 |     100 |     100
+src/index.js   |     100 |      100 |     100 |     100
+src/parse.js   |     100 |      100 |     100 |     100
+src/stringify.js|    100 |      100 |     100 |     100
+```
+
+## Improvements This Audit (2026-07-17)
+
+1. **Achieved 100% coverage on cli.js** — Was 97.64% stmts / 88.88% branches. CLI catch block (error handling path) was untested.
+2. **Added 9 new tests** (102 → 111):
+   - CLI stringify with invalid JSON (triggers catch block, lines 83-85)
+   - CLI stringify-objects with invalid JSON
+   - CLI parse with invalid delimiter (multi-char validation via CLI)
+   - CLI parse-objects with file argument (not just stdin)
+   - CLI parse with file argument
+   - CLI -h short flag (was only testing --help)
+   - CLI --eol option for stringify
+   - CLI --quote option for parse
+   - CLI opts with missing value (edge case: --delimiter at end)
 
 ## Source Files
 
@@ -38,10 +66,9 @@
 | `src/index.js` | 4 | 100% all |
 | `src/parse.js` | 135 | 100% all |
 | `src/stringify.js` | 57 | 100% all |
-| `cli.js` | 85 | 97.64% stmts, 88.88% branches |
+| `cli.js` | 85 | 100% all |
 
 ## Notes
 
-- 14 edge-case tests added during audit (88 → 102): multi-char quote validation, CLI help/unknown-command/no-args coverage, CLI stringify-objects stdin, custom quote char parse, duplicate header missing value, three duplicate headers, whitespace-only input, empty field preservation, trailing EOL guarantee.
 - Project has zero runtime dependencies. Dev dependencies: c8 (coverage), eslint (linting), globals (eslint config).
 - CLI covers parse, parse-objects, stringify, stringify-objects with stdin/file input, custom delimiter/quote/eol/columns options.
