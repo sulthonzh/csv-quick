@@ -19,8 +19,8 @@
     "csv-quick": "cli.js"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "test:coverage": "c8 node --test test/*.test.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "test:coverage": "c8 node --test --test-concurrency=1 test/*.test.js",
     "lint": "eslint src/ cli.js test/",
     "prepublishOnly": "npm test && npm run lint"
   },

@@ -1,6 +1,6 @@
 # csv-quick — Exceptional Checklist Audit
 
-**Audit date:** 2026-08-01 (UTC 2026-08-01 04:50) — re-verified, no changes since prior audit  
+**Audit date:** 2026-08-03 (UTC 2026-08-03 14:14) — merged 3 remote commits, fixed test concurrency hang  
 **Prior audit:** 2026-07-07 14:48 UTC  
 **Auditor:** oss-builder  
 **Version:** 1.1.0  
